@@ -250,6 +250,28 @@ export const deviceApi = {
     );
     return response.data;
   },
+
+  bulkDeployScript: async (
+    deviceIps: string[],
+    name: string,
+    code: string,
+    options: { enable?: boolean; run?: boolean; overwrite?: boolean } = {},
+  ): Promise<ActionResult[]> => {
+    const timeout = getBulkOperationTimeout(deviceIps.length);
+    const response = await apiClient.post(
+      "/devices/bulk/scripts/deploy",
+      {
+        device_ips: deviceIps,
+        name,
+        code,
+        enable: options.enable ?? true,
+        run: options.run ?? true,
+        overwrite: options.overwrite ?? true,
+      },
+      { timeout },
+    );
+    return response.data;
+  },
 };
 
 export const credentialsApi = {

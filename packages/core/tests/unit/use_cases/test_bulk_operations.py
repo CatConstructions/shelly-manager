@@ -800,3 +800,206 @@ class TestBulkOperationsUseCase:
             "SetConfig",
             {"config": config},
         )
+
+
+class TestDeployBulkScript:
+
+    @pytest.fixture
+    def use_case(self, mock_device_gateway):
+        return BulkOperationsUseCase(device_gateway=mock_device_gateway)
+
+    @staticmethod
+    def _ok(action_type, data=None):
+        return ActionResult(
+            success=True,
+            action_type=action_type,
+            device_ip="192.168.1.100",
+            message="ok",
+            data=data,
+        )
+
+    @staticmethod
+    def _fail(action_type, error="boom"):
+        return ActionResult(
+            success=False,
+            action_type=action_type,
+            device_ip="192.168.1.100",
+            message="failed",
+            error=error,
+        )
+
+    async def test_it_deploys_a_script_and_enables_and_starts_it(
+        self, use_case, mock_device_gateway
+    ):
+        async def side_effect(ip, component_key, action, parameters=None):
+            if component_key == "script" and action == "List":
+                return self._ok("script.List", {"result": {"scripts": []}})
+            if component_key == "script" and action == "Create":
+                return self._ok("script.Create", {"result": {"id": 3}})
+            if component_key == "script:3" and action == "PutCode":
+                return self._ok("script:3.PutCode")
+            if component_key == "script:3" and action == "SetConfig":
+                return self._ok("script:3.SetConfig")
+            if component_key == "script:3" and action == "Start":
+                return self._ok("script:3.Start")
+            raise AssertionError(f"Unexpected call: {component_key}.{action}")
+
+        mock_device_gateway.execute_component_action = AsyncMock(
+            side_effect=side_effect
+        )
+
+        results = await use_case.deploy_bulk_script(
+            ["192.168.1.100"], "my-script", "console.log('hi');"
+        )
+
+        assert len(results) == 1
+        result = results[0]
+        assert result.success is True
+        assert result.data["script_id"] == 3
+        assert result.data["steps"] == {
+            "create": True,
+            "put_code": True,
+            "enable": True,
+            "start": True,
+        }
+
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.100", "script", "Create", {"name": "my-script"}
+        )
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.100",
+            "script:3",
+            "PutCode",
+            {"code": "console.log('hi');"},
+        )
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.100", "script:3", "SetConfig", {"config": {"enable": True}}
+        )
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.100", "script:3", "Start", {}
+        )
+
+    async def test_it_skips_enable_and_start_when_disabled(
+        self, use_case, mock_device_gateway
+    ):
+        async def side_effect(ip, component_key, action, parameters=None):
+            if component_key == "script" and action == "List":
+                return self._ok("script.List", {"result": {"scripts": []}})
+            if component_key == "script" and action == "Create":
+                return self._ok("script.Create", {"result": {"id": 1}})
+            if component_key == "script:1" and action == "PutCode":
+                return self._ok("script:1.PutCode")
+            raise AssertionError(f"Unexpected call: {component_key}.{action}")
+
+        mock_device_gateway.execute_component_action = AsyncMock(
+            side_effect=side_effect
+        )
+
+        results = await use_case.deploy_bulk_script(
+            ["192.168.1.100"],
+            "my-script",
+            "code",
+            enable=False,
+            run=False,
+        )
+
+        assert results[0].success is True
+        assert "enable" not in results[0].data["steps"]
+        assert "start" not in results[0].data["steps"]
+
+    async def test_it_reports_failure_when_code_upload_fails(
+        self, use_case, mock_device_gateway
+    ):
+        async def side_effect(ip, component_key, action, parameters=None):
+            if component_key == "script" and action == "List":
+                return self._ok("script.List", {"result": {"scripts": []}})
+            if component_key == "script" and action == "Create":
+                return self._ok("script.Create", {"result": {"id": 5}})
+            if component_key == "script:5" and action == "PutCode":
+                return self._fail("script:5.PutCode", error="Device rejected code")
+            raise AssertionError(f"Unexpected call: {component_key}.{action}")
+
+        mock_device_gateway.execute_component_action = AsyncMock(
+            side_effect=side_effect
+        )
+
+        results = await use_case.deploy_bulk_script(
+            ["192.168.1.100"], "my-script", "broken code"
+        )
+
+        assert results[0].success is False
+        assert results[0].error == "Device rejected code"
+        assert results[0].data["script_id"] == 5
+
+    async def test_it_deletes_existing_script_with_same_name_before_deploying(
+        self, use_case, mock_device_gateway
+    ):
+        async def side_effect(ip, component_key, action, parameters=None):
+            if component_key == "script" and action == "List":
+                return self._ok(
+                    "script.List",
+                    {"result": {"scripts": [{"id": 9, "name": "my-script"}]}},
+                )
+            if component_key == "script:9" and action == "Delete":
+                return self._ok("script:9.Delete")
+            if component_key == "script" and action == "Create":
+                return self._ok("script.Create", {"result": {"id": 10}})
+            if component_key == "script:10" and action == "PutCode":
+                return self._ok("script:10.PutCode")
+            if component_key == "script:10" and action == "SetConfig":
+                return self._ok("script:10.SetConfig")
+            if component_key == "script:10" and action == "Start":
+                return self._ok("script:10.Start")
+            raise AssertionError(f"Unexpected call: {component_key}.{action}")
+
+        mock_device_gateway.execute_component_action = AsyncMock(
+            side_effect=side_effect
+        )
+
+        results = await use_case.deploy_bulk_script(
+            ["192.168.1.100"], "my-script", "code"
+        )
+
+        assert results[0].success is True
+        assert results[0].data["steps"]["removed_existing"] is True
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.100", "script:9", "Delete", {}
+        )
+
+    async def test_it_deploys_to_multiple_devices_in_parallel(
+        self, use_case, mock_device_gateway
+    ):
+        async def side_effect(ip, component_key, action, parameters=None):
+            if component_key == "script" and action == "List":
+                return ActionResult(
+                    success=True,
+                    action_type="script.List",
+                    device_ip=ip,
+                    message="ok",
+                    data={"result": {"scripts": []}},
+                )
+            if component_key == "script" and action == "Create":
+                return ActionResult(
+                    success=True,
+                    action_type="script.Create",
+                    device_ip=ip,
+                    message="ok",
+                    data={"result": {"id": 1}},
+                )
+            return ActionResult(
+                success=True,
+                action_type=f"script:1.{action}",
+                device_ip=ip,
+                message="ok",
+            )
+
+        mock_device_gateway.execute_component_action = AsyncMock(
+            side_effect=side_effect
+        )
+
+        device_ips = ["192.168.1.100", "192.168.1.101", "192.168.1.102"]
+        results = await use_case.deploy_bulk_script(device_ips, "my-script", "code")
+
+        assert len(results) == 3
+        assert {r.device_ip for r in results} == set(device_ips)
+        assert all(r.success for r in results)

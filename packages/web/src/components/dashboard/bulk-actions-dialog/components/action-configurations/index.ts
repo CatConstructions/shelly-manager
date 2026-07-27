@@ -4,3 +4,4 @@ export { RebootActionConfig } from "./reboot-action-config";
 export { FactoryResetConfig } from "./factory-reset-config";
 export { ExportConfigConfig } from "./export-config-config";
 export { ApplyConfigConfig } from "./apply-config-config";
+export { DeployScriptConfig } from "./deploy-script-config";

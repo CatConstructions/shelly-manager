@@ -5,7 +5,8 @@ export type BulkActionType =
   | "reboot"
   | "factory_reset"
   | "export_config"
-  | "apply_config";
+  | "apply_config"
+  | "deploy_script";
 
 export interface BulkProgress {
   total: number;
@@ -45,6 +46,14 @@ export interface ActionConfigurationProps {
   configurationJson: string;
   onConfigurationJsonChange: (json: string) => void;
   configError: string;
+  scriptName: string;
+  onScriptNameChange: (name: string) => void;
+  scriptCode: string;
+  onScriptCodeChange: (code: string) => void;
+  scriptEnable: boolean;
+  onScriptEnableChange: (enable: boolean) => void;
+  scriptRun: boolean;
+  onScriptRunChange: (run: boolean) => void;
   onExecute: () => void;
   onCancel: () => void;
 }
@@ -124,4 +133,15 @@ export interface ApplyConfigActionProps extends BaseActionConfigProps {
   configurationJson: string;
   onConfigurationJsonChange: (json: string) => void;
   configError: string;
+}
+
+export interface DeployScriptActionProps extends BaseActionConfigProps {
+  scriptName: string;
+  onScriptNameChange: (name: string) => void;
+  scriptCode: string;
+  onScriptCodeChange: (code: string) => void;
+  scriptEnable: boolean;
+  onScriptEnableChange: (enable: boolean) => void;
+  scriptRun: boolean;
+  onScriptRunChange: (run: boolean) => void;
 }

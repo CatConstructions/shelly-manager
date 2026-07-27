@@ -4,6 +4,7 @@ import {
   FactoryResetConfig,
   ExportConfigConfig,
   ApplyConfigConfig,
+  DeployScriptConfig,
 } from "./action-configurations";
 import type { ActionConfigurationProps } from "../types";
 
@@ -20,6 +21,14 @@ export function ActionConfiguration({
   configurationJson,
   onConfigurationJsonChange,
   configError,
+  scriptName,
+  onScriptNameChange,
+  scriptCode,
+  onScriptCodeChange,
+  scriptEnable,
+  onScriptEnableChange,
+  scriptRun,
+  onScriptRunChange,
   onExecute,
   onCancel,
 }: ActionConfigurationProps) {
@@ -65,6 +74,22 @@ export function ActionConfiguration({
           configurationJson={configurationJson}
           onConfigurationJsonChange={onConfigurationJsonChange}
           configError={configError}
+          onExecute={onExecute}
+          onCancel={onCancel}
+        />
+      );
+
+    case "deploy_script":
+      return (
+        <DeployScriptConfig
+          scriptName={scriptName}
+          onScriptNameChange={onScriptNameChange}
+          scriptCode={scriptCode}
+          onScriptCodeChange={onScriptCodeChange}
+          scriptEnable={scriptEnable}
+          onScriptEnableChange={onScriptEnableChange}
+          scriptRun={scriptRun}
+          onScriptRunChange={onScriptRunChange}
           onExecute={onExecute}
           onCancel={onCancel}
         />

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -262,3 +263,162 @@ class BulkOperationsUseCase:
                 all_results.append(result)
 
         return all_results
+
+    async def deploy_bulk_script(
+        self,
+        device_ips: list[str],
+        name: str,
+        code: str,
+        enable: bool = True,
+        run: bool = True,
+        overwrite: bool = True,
+    ) -> list[ActionResult]:
+        """
+        Deploy a script to multiple devices simultaneously.
+
+        For each device this creates a new script (Gen2/Gen3 only), uploads
+        the source code, and optionally enables autostart on boot and starts
+        it immediately. Devices are processed in parallel.
+
+        Args:
+            device_ips: List of device IP addresses
+            name: Script name as shown on the device
+            code: Script source code (Shelly's mJS/JS engine)
+            enable: If True, enable the script so it autostarts on boot
+            run: If True, start the script immediately after upload
+            overwrite: If True, an existing script with the same name on a
+                device is deleted first, so re-running the deployment does
+                not accumulate duplicate scripts
+
+        Returns:
+            One ActionResult per device summarizing the deployment outcome
+        """
+        tasks = [
+            self._deploy_script_to_device(ip, name, code, enable, run, overwrite)
+            for ip in device_ips
+        ]
+        return await asyncio.gather(*tasks)
+
+    async def _deploy_script_to_device(
+        self,
+        device_ip: str,
+        name: str,
+        code: str,
+        enable: bool,
+        run: bool,
+        overwrite: bool,
+    ) -> ActionResult:
+        steps: dict[str, bool] = {}
+
+        if overwrite:
+            await self._delete_script_by_name(device_ip, name, steps)
+
+        create_result = await self._device_gateway.execute_component_action(
+            device_ip, "script", "Create", {"name": name}
+        )
+        steps["create"] = create_result.success
+
+        script_id = self._extract_result_field(create_result.data, "id")
+
+        if not create_result.success or script_id is None:
+            return ActionResult(
+                device_ip=device_ip,
+                action_type="script.Deploy",
+                success=False,
+                message=f"Failed to create script '{name}' on device",
+                error=create_result.error or "Script.Create did not return an id",
+                data={"steps": steps},
+            )
+
+        component_key = f"script:{script_id}"
+
+        put_code_result = await self._device_gateway.execute_component_action(
+            device_ip, component_key, "PutCode", {"code": code}
+        )
+        steps["put_code"] = put_code_result.success
+        if not put_code_result.success:
+            return ActionResult(
+                device_ip=device_ip,
+                action_type="script.Deploy",
+                success=False,
+                message=(
+                    f"Script '{name}' created (id={script_id}) but "
+                    "uploading the code failed"
+                ),
+                error=put_code_result.error,
+                data={"steps": steps, "script_id": script_id},
+            )
+
+        if enable:
+            enable_result = await self._device_gateway.execute_component_action(
+                device_ip, component_key, "SetConfig", {"config": {"enable": True}}
+            )
+            steps["enable"] = enable_result.success
+            if not enable_result.success:
+                return ActionResult(
+                    device_ip=device_ip,
+                    action_type="script.Deploy",
+                    success=False,
+                    message=(
+                        f"Script '{name}' uploaded (id={script_id}) but "
+                        "enabling autostart failed"
+                    ),
+                    error=enable_result.error,
+                    data={"steps": steps, "script_id": script_id},
+                )
+
+        if run:
+            start_result = await self._device_gateway.execute_component_action(
+                device_ip, component_key, "Start", {}
+            )
+            steps["start"] = start_result.success
+            if not start_result.success:
+                return ActionResult(
+                    device_ip=device_ip,
+                    action_type="script.Deploy",
+                    success=False,
+                    message=(
+                        f"Script '{name}' uploaded (id={script_id}) but "
+                        "starting it failed"
+                    ),
+                    error=start_result.error,
+                    data={"steps": steps, "script_id": script_id},
+                )
+
+        return ActionResult(
+            device_ip=device_ip,
+            action_type="script.Deploy",
+            success=True,
+            message=f"Script '{name}' deployed successfully (id={script_id})",
+            data={"steps": steps, "script_id": script_id},
+        )
+
+    async def _delete_script_by_name(
+        self, device_ip: str, name: str, steps: dict[str, bool]
+    ) -> None:
+        """Delete any existing script with the same name on the device, so a
+        re-deploy overwrites it instead of creating a duplicate."""
+        list_result = await self._device_gateway.execute_component_action(
+            device_ip, "script", "List", {}
+        )
+        if not list_result.success:
+            return
+
+        scripts = self._extract_result_field(list_result.data, "scripts") or []
+        for script in scripts:
+            if isinstance(script, dict) and script.get("name") == name:
+                await self._device_gateway.execute_component_action(
+                    device_ip, f"script:{script.get('id')}", "Delete", {}
+                )
+                steps["removed_existing"] = True
+
+    @staticmethod
+    def _extract_result_field(data: dict[str, Any] | None, field: str) -> Any:
+        """Pull a field out of a raw JSON-RPC response, which may or may not
+        be wrapped in a top-level 'result' object depending on the gateway."""
+        if not isinstance(data, dict):
+            return None
+        payload = data.get("result", data)
+        if not isinstance(payload, dict):
+            return None
+        return payload.get(field)

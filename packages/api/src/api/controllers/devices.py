@@ -21,8 +21,13 @@ from litestar import Router, get, post
 from litestar.exceptions import HTTPException
 from litestar.params import Body
 
-from ..presentation.dto.requests import BulkApplyConfigRequest, BulkExportConfigRequest
+from ..presentation.dto.requests import (
+    BulkApplyConfigRequest,
+    BulkExportConfigRequest,
+    BulkScriptDeployRequest,
+)
 from ..presentation.dto.responses import (
+    ActionResultResponse,
     BulkApplyConfigResponse,
     BulkExportConfigResponse,
 )
@@ -444,6 +449,39 @@ async def bulk_apply_config(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@post(
+    "/bulk/scripts/deploy",
+    status_code=200,
+    tags=["Devices"],
+    summary="Deploy a Script to Multiple Devices",
+)
+async def bulk_deploy_script(
+    data: BulkScriptDeployRequest,
+    bulk_operations_use_case: BulkOperationsUseCase | None = None,
+) -> list[ActionResultResponse]:
+    """
+    Deploy (create, upload, and optionally enable/start) a script on
+    multiple devices simultaneously. Only Gen2/Gen3 (RPC) devices support
+    scripting; Gen1 devices will report a failure for this operation.
+    """
+    bulk_operations_use_case = _require(
+        "bulk_operations_use_case", bulk_operations_use_case
+    )
+
+    try:
+        results = await bulk_operations_use_case.deploy_bulk_script(
+            data.device_ips,
+            data.name,
+            data.code,
+            enable=data.enable,
+            run=data.run,
+            overwrite=data.overwrite,
+        )
+        return [ActionResultResponse(**result.model_dump()) for result in results]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 devices_router = Router(
     path="/devices",
     route_handlers=[
@@ -456,5 +494,6 @@ devices_router = Router(
         execute_bulk_operations,
         bulk_export_config,
         bulk_apply_config,
+        bulk_deploy_script,
     ],
 )

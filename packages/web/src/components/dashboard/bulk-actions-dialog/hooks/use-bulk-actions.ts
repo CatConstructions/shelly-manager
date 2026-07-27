@@ -231,11 +231,60 @@ export function useBulkActions({
     },
   });
 
+  const bulkDeployScriptMutation = useMutation({
+    mutationFn: async ({
+      scriptName,
+      scriptCode,
+      scriptEnable,
+      scriptRun,
+    }: {
+      scriptName: string;
+      scriptCode: string;
+      scriptEnable: boolean;
+      scriptRun: boolean;
+    }) => {
+      const deviceIps = selectedDevices.map((device) => device.ip);
+      return deviceApi.bulkDeployScript(deviceIps, scriptName, scriptCode, {
+        enable: scriptEnable,
+        run: scriptRun,
+      });
+    },
+    onSuccess: (results) => {
+      const successful = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+
+      setProgress({
+        total: results.length,
+        completed: successful,
+        failed,
+        results,
+        isRunning: false,
+      });
+
+      if (failed === 0) {
+        toast.success(
+          t("bulkActions.messages.deploySuccess", { count: successful }),
+        );
+      } else {
+        toast.warning(
+          t("bulkActions.messages.deployPartial", { successful, failed }),
+        );
+      }
+
+      onComplete?.();
+    },
+    onError: (error) => {
+      toast.error(handleApiError(error));
+      setProgress((prev) => (prev ? { ...prev, isRunning: false } : null));
+    },
+  });
+
   return {
     bulkUpdateMutation,
     bulkRebootMutation,
     bulkFactoryResetMutation,
     bulkExportConfigMutation,
     bulkApplyConfigMutation,
+    bulkDeployScriptMutation,
   };
 }

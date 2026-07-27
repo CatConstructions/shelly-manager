@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Power, Download, Upload, AlertCircle } from "lucide-react";
+import { Power, Download, Upload, AlertCircle, FileCode } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -47,6 +47,12 @@ export function ActionSelection({ onActionSelect }: ActionSelectionProps) {
       titleKey: "bulkActions.applyConfiguration",
       descriptionKey: "bulkActions.descriptions.applyConfiguration",
       icon: <Download className="h-6 w-6" />,
+    },
+    {
+      id: "deploy_script" as BulkActionType,
+      titleKey: "bulkActions.deployScript",
+      descriptionKey: "bulkActions.descriptions.deployScript",
+      icon: <FileCode className="h-6 w-6" />,
     },
   ];
 

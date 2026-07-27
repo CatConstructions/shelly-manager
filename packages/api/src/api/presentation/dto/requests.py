@@ -215,6 +215,41 @@ class BulkApplyConfigRequest(BaseModel):
         return v
 
 
+class BulkScriptDeployRequest(BaseModel):
+    """Request for deploying a script to multiple devices at once."""
+
+    device_ips: list[str] = Field(
+        ..., min_length=1, description="List of device IP addresses"
+    )
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Script name on the device"
+    )
+    code: str = Field(..., min_length=1, description="Script source code (mJS/JS)")
+    enable: bool = Field(
+        default=True,
+        description="Enable the script so it autostarts on device boot",
+    )
+    run: bool = Field(
+        default=True, description="Start the script immediately after upload"
+    )
+    overwrite: bool = Field(
+        default=True,
+        description="Delete an existing script with the same name before deploying",
+    )
+
+    @field_validator("device_ips")
+    @classmethod
+    def validate_device_ips(cls, v: list[str]) -> list[str]:
+        return _validate_ip_addresses(v)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Script name cannot be empty")
+        return v.strip()
+
+
 class CreateProvisioningProfileRequest(BaseModel):
     """Request model for creating a provisioning profile."""
 

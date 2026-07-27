@@ -43,6 +43,10 @@ export function BulkActionsDialog({
     useState<string>("");
   const [configurationJson, setConfigurationJson] = useState<string>("");
   const [configError, setConfigError] = useState<string>("");
+  const [scriptName, setScriptName] = useState<string>("");
+  const [scriptCode, setScriptCode] = useState<string>("");
+  const [scriptEnable, setScriptEnable] = useState<boolean>(true);
+  const [scriptRun, setScriptRun] = useState<boolean>(true);
 
   const {
     progress,
@@ -59,6 +63,7 @@ export function BulkActionsDialog({
     bulkFactoryResetMutation,
     bulkExportConfigMutation,
     bulkApplyConfigMutation,
+    bulkDeployScriptMutation,
   } = useBulkActions({
     selectedDevices,
     onComplete,
@@ -73,6 +78,10 @@ export function BulkActionsDialog({
     setSelectedComponentType("");
     setConfigurationJson("");
     setConfigError("");
+    setScriptName("");
+    setScriptCode("");
+    setScriptEnable(true);
+    setScriptRun(true);
   };
 
   const handleClose = () => {
@@ -116,6 +125,20 @@ export function BulkActionsDialog({
       }
     }
 
+    if (selectedAction === "deploy_script") {
+      if (!scriptName.trim()) {
+        toast.error(t("bulkActions.messages.noScriptNameProvided"));
+        resetProgress();
+        return;
+      }
+
+      if (!scriptCode.trim()) {
+        toast.error(t("bulkActions.messages.noScriptCodeProvided"));
+        resetProgress();
+        return;
+      }
+    }
+
     switch (selectedAction) {
       case "update":
         bulkUpdateMutation.mutate(updateChannel);
@@ -133,6 +156,14 @@ export function BulkActionsDialog({
         bulkApplyConfigMutation.mutate({
           selectedComponentType,
           configurationJson,
+        });
+        break;
+      case "deploy_script":
+        bulkDeployScriptMutation.mutate({
+          scriptName,
+          scriptCode,
+          scriptEnable,
+          scriptRun,
         });
         break;
       default:
@@ -178,6 +209,14 @@ export function BulkActionsDialog({
               configurationJson={configurationJson}
               onConfigurationJsonChange={handleConfigurationJsonChange}
               configError={configError}
+              scriptName={scriptName}
+              onScriptNameChange={setScriptName}
+              scriptCode={scriptCode}
+              onScriptCodeChange={setScriptCode}
+              scriptEnable={scriptEnable}
+              onScriptEnableChange={setScriptEnable}
+              scriptRun={scriptRun}
+              onScriptRunChange={setScriptRun}
               onExecute={executeAction}
               onCancel={() => setSelectedAction(null)}
             />

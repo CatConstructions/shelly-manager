@@ -133,7 +133,8 @@
       "factoryReset": "Reset devices to factory defaults",
       "checkStatus": "Fetch status for selected devices",
       "exportConfigurations": "Export component configurations from selected devices",
-      "applyConfiguration": "Apply configuration to component types on selected devices"
+      "applyConfiguration": "Apply configuration to component types on selected devices",
+      "deployScript": "Upload and activate a script on selected devices"
     },
     "warnings": {
       "factoryReset": "⚠️ Destructive Action",
@@ -167,14 +168,26 @@
       "invalidJsonConfig": "Invalid JSON configuration. Please check your syntax.",
       "noComponentTypesSelected": "Please select at least one component type",
       "noConfigurationProvided": "Please provide a configuration to apply",
-      "actionNotImplemented": "Action not implemented yet"
+      "actionNotImplemented": "Action not implemented yet",
+      "deploySuccess": "Successfully deployed script to {{count}} devices",
+      "deployPartial": "Deployed script to {{successful}} devices, {{failed}} failed",
+      "noScriptNameProvided": "Please provide a script name",
+      "noScriptCodeProvided": "Please provide script code to deploy"
     },
     "comingSoonDescription": "This feature is currently under development and will be available in a future release.",
     "remaining": "Remaining",
     "elapsed": "Elapsed",
     "processing": "Processing...",
     "completed": "Completed",
-    "starting": "Starting..."
+    "starting": "Starting...",
+    "deployScript": "Deploy Script",
+    "scriptName": "Script Name",
+    "scriptCode": "Script Code",
+    "uploadScriptFile": "Upload .js File",
+    "scriptEnable": "Enable script (autostart on device boot)",
+    "scriptRun": "Start script immediately after upload",
+    "deployScriptNote": "Gen2/Gen3 devices only",
+    "deployScriptDescription": "Scripting requires Shelly Gen2 or Gen3 (RPC) devices. Gen1 devices will report a failure for this action. An existing script with the same name is overwritten."
   },
   "deviceDetail": {
     "title": "Device Details",
