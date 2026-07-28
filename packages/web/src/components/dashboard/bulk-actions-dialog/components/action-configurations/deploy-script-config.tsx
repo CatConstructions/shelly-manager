@@ -36,6 +36,9 @@ export function DeployScriptConfig({
 
   const isExecuteDisabled = !scriptName.trim() || !scriptCode.trim();
 
+  const uploadLinkClass =
+    "text-sm text-primary cursor-pointer hover:underline";
+
   return (
     <ActionConfigWrapper
       title={t("bulkActions.deployScript")}
@@ -58,9 +61,7 @@ export function DeployScriptConfig({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="script-code">{t("bulkActions.scriptCode")}</Label>
-            <label
-              className="text-sm text-primary cursor-pointer hover:underline"
-            >
+            <label className={uploadLinkClass}>
               {t("bulkActions.uploadScriptFile")}
               <input
                 type="file"
