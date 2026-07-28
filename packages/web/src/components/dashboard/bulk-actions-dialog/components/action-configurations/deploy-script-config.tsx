@@ -36,8 +36,7 @@ export function DeployScriptConfig({
 
   const isExecuteDisabled = !scriptName.trim() || !scriptCode.trim();
 
-  const uploadLinkClass =
-    "text-sm text-primary cursor-pointer hover:underline";
+  const uploadLinkClass = "text-sm text-primary cursor-pointer hover:underline";
 
   return (
     <ActionConfigWrapper
