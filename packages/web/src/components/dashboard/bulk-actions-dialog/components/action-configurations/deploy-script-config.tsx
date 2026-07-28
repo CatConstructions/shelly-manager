@@ -58,7 +58,9 @@ export function DeployScriptConfig({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="script-code">{t("bulkActions.scriptCode")}</Label>
-            <label className="text-sm text-primary cursor-pointer hover:underline">
+            <label
+              className="text-sm text-primary cursor-pointer hover:underline"
+            >
               {t("bulkActions.uploadScriptFile")}
               <input
                 type="file"
@@ -72,7 +74,7 @@ export function DeployScriptConfig({
             id="script-code"
             value={scriptCode}
             onChange={(e) => onScriptCodeChange(e.target.value)}
-            placeholder={`Shelly.addStatusHandler(function (status) {\n  // ...\n});`}
+            placeholder={"Shelly.addStatusHandler(function (status) {...})"}
             className="font-mono text-sm min-h-[220px]"
           />
         </div>
@@ -81,7 +83,9 @@ export function DeployScriptConfig({
           <Checkbox
             id="script-enable"
             checked={scriptEnable}
-            onCheckedChange={(checked) => onScriptEnableChange(checked === true)}
+            onCheckedChange={(checked) =>
+              onScriptEnableChange(checked === true)
+            }
           />
           <Label htmlFor="script-enable" className="font-normal">
             {t("bulkActions.scriptEnable")}

@@ -8,6 +8,7 @@ const OPERATION_TIME_ESTIMATES: Record<BulkActionType, number> = {
   factory_reset: 3000, // 3 seconds per device
   export_config: 3000, // 3 seconds per device
   apply_config: 3000, // 3 seconds per device
+  deploy_script: 5000, // 5 seconds per device (create + upload + enable + start)
 };
 
 const PROGRESS_UPDATE_INTERVAL = 1000; // Update every second
