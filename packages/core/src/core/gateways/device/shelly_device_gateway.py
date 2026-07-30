@@ -241,16 +241,36 @@ class ShellyDeviceGateway(DeviceGateway):
                     return legacy_status
             return None
 
+    # These component types are always singletons on Gen2+ devices - their
+    # key is simply the type name, no id/lookup needed. Some devices don't
+    # reliably surface these "service" components via Shelly.GetComponents,
+    # so we skip discovery for them entirely rather than depend on that.
+    SINGLETON_COMPONENT_TYPES = {
+        "sys",
+        "wifi",
+        "cloud",
+        "mqtt",
+        "ble",
+        "ws",
+        "eth",
+        "knx",
+        "modbus",
+        "zigbee",
+    }
+
     async def get_component_keys(self, ip: str, component_type: str) -> list[str]:
         """Get component keys for a given type.
 
-        Shelly.GetComponents is paginated - devices with many components
-        (many switches/inputs, scripts, KNX, Modbus, Zigbee, etc.) may not
-        return everything in a single page. This paginates through all
-        pages (using the response's 'total' count) before filtering, so
-        components on later pages - including singleton services like
-        'sys' or 'wifi' - aren't missed.
+        For singleton service components (sys, wifi, cloud, ...) the key is
+        always just the type name, so no discovery call is needed. For
+        multi-instance components (switch, input, cover, script, ...) this
+        paginates through Shelly.GetComponents (using the response's
+        'total' count), since devices with many components may not return
+        everything in a single page.
         """
+        if component_type in self.SINGLETON_COMPONENT_TYPES:
+            return [component_type]
+
         try:
             all_components: list[dict[str, Any]] = []
             offset = 0
