@@ -242,18 +242,38 @@ class ShellyDeviceGateway(DeviceGateway):
             return None
 
     async def get_component_keys(self, ip: str, component_type: str) -> list[str]:
-        """Get component keys for a given type using a single RPC call."""
+        """Get component keys for a given type.
+
+        Shelly.GetComponents is paginated - devices with many components
+        (many switches/inputs, scripts, KNX, Modbus, Zigbee, etc.) may not
+        return everything in a single page. This paginates through all
+        pages (using the response's 'total' count) before filtering, so
+        components on later pages - including singleton services like
+        'sys' or 'wifi' - aren't missed.
+        """
         try:
-            response, _ = await self._rpc_client.make_rpc_request(
-                ip,
-                RpcMethods.GET_COMPONENTS,
-                params={"offset": 0},
-                timeout=self.timeout,
-            )
-            components = response.get("result", response).get("components", [])
+            all_components: list[dict[str, Any]] = []
+            offset = 0
+
+            while True:
+                response, _ = await self._rpc_client.make_rpc_request(
+                    ip,
+                    RpcMethods.GET_COMPONENTS,
+                    params={"offset": offset},
+                    timeout=self.timeout,
+                )
+                result = response.get("result", response)
+                components = result.get("components", [])
+                all_components.extend(components)
+
+                total = result.get("total", len(all_components))
+                if not components or len(all_components) >= total:
+                    break
+                offset += len(components)
+
             return [
                 c["key"]
-                for c in components
+                for c in all_components
                 if c.get("key", "").split(":")[0] == component_type
             ]
         except Exception:
