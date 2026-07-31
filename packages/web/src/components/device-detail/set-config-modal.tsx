@@ -74,7 +74,12 @@ export function SetConfigModal({
       });
 
       if (result.success && result.data) {
-        configuration.loadFromObject(result.data);
+        const rawData = result.data as Record<string, unknown>;
+        const configData =
+          rawData.result && typeof rawData.result === "object"
+            ? rawData.result
+            : rawData;
+        configuration.loadFromObject(configData);
         toast.success(
           t(
             "componentActions.setConfig.loadSuccess",
