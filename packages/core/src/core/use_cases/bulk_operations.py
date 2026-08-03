@@ -266,43 +266,59 @@ class BulkOperationsUseCase:
         Returns:
             List of action results
         """
-        all_results = []
+        tasks = [
+            self._apply_config_to_device(device_ip, component_type, config)
+            for device_ip in device_ips
+        ]
+        results_per_device = await asyncio.gather(*tasks)
 
-        for device_ip in device_ips:
-            keys = await self._device_gateway.get_component_keys(
-                device_ip, component_type
-            )
-
-            if not keys:
-                all_results.append(
-                    ActionResult(
-                        device_ip=device_ip,
-                        action_type=f"{component_type}.SetConfig",
-                        success=False,
-                        message=f"No {component_type} components found on device",
-                        error=f"Component type {component_type} not present"
-                        " or device unreachable",
-                    )
-                )
-                continue
-
-            device_config = config
-            if _config_needs_device_id(config):
-                discovered = await self._device_gateway.discover_device(device_ip)
-                device_id = (
-                    discovered.device_id
-                    if discovered and discovered.device_id
-                    else device_ip
-                )
-                device_config = _substitute_device_id(config, device_id)
-
-            for key in keys:
-                result = await self._device_gateway.execute_component_action(
-                    device_ip, key, "SetConfig", {"config": device_config}
-                )
-                all_results.append(result)
-
+        all_results: list[ActionResult] = []
+        for results in results_per_device:
+            all_results.extend(results)
         return all_results
+
+    async def _apply_config_to_device(
+        self,
+        device_ip: str,
+        component_type: str,
+        config: dict[str, Any],
+    ) -> list[ActionResult]:
+        """Apply config to a single device; returns one ActionResult per
+        resolved component key (usually one, more for multi-instance
+        components like switch)."""
+        keys = await self._device_gateway.get_component_keys(
+            device_ip, component_type
+        )
+
+        if not keys:
+            return [
+                ActionResult(
+                    device_ip=device_ip,
+                    action_type=f"{component_type}.SetConfig",
+                    success=False,
+                    message=f"No {component_type} components found on device",
+                    error=f"Component type {component_type} not present"
+                    " or device unreachable",
+                )
+            ]
+
+        device_config = config
+        if _config_needs_device_id(config):
+            discovered = await self._device_gateway.discover_device(device_ip)
+            device_id = (
+                discovered.device_id
+                if discovered and discovered.device_id
+                else device_ip
+            )
+            device_config = _substitute_device_id(config, device_id)
+
+        results = []
+        for key in keys:
+            result = await self._device_gateway.execute_component_action(
+                device_ip, key, "SetConfig", {"config": device_config}
+            )
+            results.append(result)
+        return results
 
     async def deploy_bulk_script(
         self,
