@@ -286,9 +286,7 @@ class BulkOperationsUseCase:
         """Apply config to a single device; returns one ActionResult per
         resolved component key (usually one, more for multi-instance
         components like switch)."""
-        keys = await self._device_gateway.get_component_keys(
-            device_ip, component_type
-        )
+        keys = await self._device_gateway.get_component_keys(device_ip, component_type)
 
         if not keys:
             return [
