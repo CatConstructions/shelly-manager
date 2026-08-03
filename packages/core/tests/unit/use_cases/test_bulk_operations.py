@@ -8,7 +8,9 @@ from core.domain.entities.components import (
     SystemComponent,
 )
 from core.domain.entities.device_status import DeviceStatus
+from core.domain.entities.discovered_device import DiscoveredDevice
 from core.domain.entities.exceptions import BulkOperationError
+from core.domain.enums.enums import Status
 from core.domain.value_objects.action_result import ActionResult
 from core.use_cases.bulk_operations import BulkOperationsUseCase
 
@@ -1003,3 +1005,117 @@ class TestDeployBulkScript:
         assert len(results) == 3
         assert {r.device_ip for r in results} == set(device_ips)
         assert all(r.success for r in results)
+
+
+class TestApplyBulkConfigDeviceIdPlaceholder:
+
+    @pytest.fixture
+    def use_case(self, mock_device_gateway):
+        return BulkOperationsUseCase(device_gateway=mock_device_gateway)
+
+    async def test_it_sends_config_unchanged_when_no_placeholder_present(
+        self, use_case, mock_device_gateway
+    ):
+        mock_device_gateway.get_component_keys = AsyncMock(return_value=["mqtt"])
+        mock_device_gateway.discover_device = AsyncMock()
+        mock_device_gateway.execute_component_action = AsyncMock(
+            return_value=ActionResult(
+                success=True,
+                action_type="mqtt.SetConfig",
+                device_ip="192.168.1.100",
+                message="ok",
+            )
+        )
+
+        config = {"enable": True, "server": "192.168.1.50:1883"}
+        await use_case.apply_bulk_config(["192.168.1.100"], "mqtt", config)
+
+        mock_device_gateway.discover_device.assert_not_called()
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.100", "mqtt", "SetConfig", {"config": config}
+        )
+
+    async def test_it_substitutes_device_id_placeholder_per_device(
+        self, use_case, mock_device_gateway
+    ):
+        mock_device_gateway.get_component_keys = AsyncMock(return_value=["mqtt"])
+
+        async def discover_side_effect(ip, timeout=None):
+            return DiscoveredDevice(
+                ip=ip,
+                status=Status.DETECTED,
+                device_id="shellypro4pm-" + ip.replace(".", ""),
+            )
+
+        mock_device_gateway.discover_device = AsyncMock(
+            side_effect=discover_side_effect
+        )
+        mock_device_gateway.execute_component_action = AsyncMock(
+            return_value=ActionResult(
+                success=True,
+                action_type="mqtt.SetConfig",
+                device_ip="192.168.1.100",
+                message="ok",
+            )
+        )
+
+        config = {
+            "enable": True,
+            "topic_prefix": "telemetry/{{device_id}}",
+            "nested": {"also": "{{device_id}}-suffix"},
+        }
+
+        await use_case.apply_bulk_config(
+            ["192.168.1.100", "192.168.1.101"], "mqtt", config
+        )
+
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.100",
+            "mqtt",
+            "SetConfig",
+            {
+                "config": {
+                    "enable": True,
+                    "topic_prefix": "telemetry/shellypro4pm-1921681100",
+                    "nested": {"also": "shellypro4pm-1921681100-suffix"},
+                }
+            },
+        )
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.101",
+            "mqtt",
+            "SetConfig",
+            {
+                "config": {
+                    "enable": True,
+                    "topic_prefix": "telemetry/shellypro4pm-1921681101",
+                    "nested": {"also": "shellypro4pm-1921681101-suffix"},
+                }
+            },
+        )
+        # original config dict passed in must not be mutated
+        assert config["topic_prefix"] == "telemetry/{{device_id}}"
+
+    async def test_it_falls_back_to_ip_when_device_id_unavailable(
+        self, use_case, mock_device_gateway
+    ):
+        mock_device_gateway.get_component_keys = AsyncMock(return_value=["mqtt"])
+        mock_device_gateway.discover_device = AsyncMock(return_value=None)
+        mock_device_gateway.execute_component_action = AsyncMock(
+            return_value=ActionResult(
+                success=True,
+                action_type="mqtt.SetConfig",
+                device_ip="192.168.1.100",
+                message="ok",
+            )
+        )
+
+        config = {"topic_prefix": "telemetry/{{device_id}}"}
+        await use_case.apply_bulk_config(["192.168.1.100"], "mqtt", config)
+
+        mock_device_gateway.execute_component_action.assert_any_call(
+            "192.168.1.100",
+            "mqtt",
+            "SetConfig",
+            {"config": {"topic_prefix": "telemetry/192.168.1.100"}},
+        )

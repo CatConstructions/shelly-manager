@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -6,6 +7,29 @@ from ..domain.entities.device_status import DeviceStatus
 from ..domain.entities.exceptions import BulkOperationError
 from ..domain.value_objects.action_result import ActionResult
 from ..gateways.device import DeviceGateway
+
+_DEVICE_ID_PLACEHOLDER = "{{device_id}}"
+
+
+def _config_needs_device_id(config: dict[str, Any]) -> bool:
+    """Cheap check for whether a config contains the device_id placeholder,
+    so we only pay for an extra device-info lookup when it's actually used."""
+    try:
+        return _DEVICE_ID_PLACEHOLDER in json.dumps(config)
+    except (TypeError, ValueError):
+        return False
+
+
+def _substitute_device_id(value: Any, device_id: str) -> Any:
+    """Recursively replace the {{device_id}} placeholder in any string
+    values within a (possibly nested) config structure."""
+    if isinstance(value, str):
+        return value.replace(_DEVICE_ID_PLACEHOLDER, device_id)
+    if isinstance(value, dict):
+        return {k: _substitute_device_id(v, device_id) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_substitute_device_id(v, device_id) for v in value]
+    return value
 
 
 class BulkOperationsUseCase:
@@ -228,6 +252,12 @@ class BulkOperationsUseCase:
         Resolves actual component keys (e.g. cover:0) per device to ensure
         the RPC call includes the required component ID.
 
+        The config may contain the literal placeholder "{{device_id}}" in
+        any string value (e.g. for topic_prefix); it is replaced per-device
+        with that device's actual id (from Shelly.GetDeviceInfo) before the
+        config is sent, so the same request can be applied to many devices
+        while still producing a device-specific value on each one.
+
         Args:
             device_ips: List of device IP addresses
             component_type: Type of component to apply configuration to
@@ -256,9 +286,19 @@ class BulkOperationsUseCase:
                 )
                 continue
 
+            device_config = config
+            if _config_needs_device_id(config):
+                discovered = await self._device_gateway.discover_device(device_ip)
+                device_id = (
+                    discovered.device_id
+                    if discovered and discovered.device_id
+                    else device_ip
+                )
+                device_config = _substitute_device_id(config, device_id)
+
             for key in keys:
                 result = await self._device_gateway.execute_component_action(
-                    device_ip, key, "SetConfig", {"config": config}
+                    device_ip, key, "SetConfig", {"config": device_config}
                 )
                 all_results.append(result)
 
